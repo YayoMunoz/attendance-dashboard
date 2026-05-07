@@ -159,7 +159,6 @@ export default function DashboardCorporate() {
       .then(rows => {
         if (!rows || !rows.length) { setLoading(false); return; }
 
-        // Map sheet columns to employee objects
         const mapped = rows
           .filter(r => r["Name"] || r["name"] || r["Nombre"])
           .map((r, i) => ({
@@ -175,9 +174,10 @@ export default function DashboardCorporate() {
 
         if (mapped.length > 0) {
           setEmployees(mapped);
-          // Re-lock client if URL param present
           if (urlClient) {
-            const match = mapped.map(e => e.client).find(c => matchClient(c));
+            const match = mapped.map(e => e.client).find(c =>
+              c.toLowerCase().replace(/\s/g,"") === urlClient.toLowerCase().replace(/\s/g,"")
+            );
             if (match) setActiveClient(match);
           }
         }
@@ -187,6 +187,7 @@ export default function DashboardCorporate() {
         setSheetError("Could not connect to Google Sheets — showing local data.");
         setLoading(false);
       });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const now     = new Date();
