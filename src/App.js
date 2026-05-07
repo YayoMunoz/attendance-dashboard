@@ -161,16 +161,30 @@ export default function DashboardCorporate() {
 
         const mapped = rows
           .filter(r => r["Name"] || r["name"] || r["Nombre"])
-          .map((r, i) => ({
-            id:      i + 1,
-            client:  r["Client"]  || r["client"]  || r["Cliente"] || "Unknown",
-            name:    r["Name"]    || r["name"]    || r["Nombre"]  || "Unknown",
-            role:    r["Role"]    || r["role"]    || r["Posición"]|| "—",
-            manager: r["Manager"] || r["manager"] || r["Jefe"]    || "—",
-            status:  normStatus(r["Status"] || r["status"] || r["Estado"] || ""),
-            arrival: r["Arrival"] || r["arrival"] || r["Hora"]    || null,
-            comment: r["Comment"] || r["comment"] || r["Comentario"] || "",
-          }));
+          .map((r, i) => {
+            // Parse date — handle formats like 7/5/2026, 2026-05-07, etc.
+            const rawDate = r["Date"] || r["date"] || r["Fecha"] || "";
+            let dateKey = "";
+            if (rawDate) {
+              const d = new Date(rawDate);
+              if (!isNaN(d)) {
+                dateKey = `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
+              } else {
+                dateKey = rawDate.toString().trim();
+              }
+            }
+            return {
+              id:      i + 1,
+              date:    dateKey,
+              client:  r["Client"]  || r["client"]  || r["Cliente"] || "Unknown",
+              name:    r["Name"]    || r["name"]    || r["Nombre"]  || "Unknown",
+              role:    r["Role"]    || r["role"]    || r["Posición"]|| "—",
+              manager: r["Manager"] || r["manager"] || r["Jefe"]    || "—",
+              status:  normStatus(r["Status"] || r["status"] || r["Estado"] || ""),
+              arrival: r["Arrival"] || r["arrival"] || r["Hora"]    || null,
+              comment: r["Comment"] || r["comment"] || r["Comentario"] || "",
+            };
+          });
 
         if (mapped.length > 0) {
           setEmployees(mapped);
@@ -191,19 +205,28 @@ export default function DashboardCorporate() {
   }, []);
 
   const now     = new Date();
+  const todayKey = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()}`;
   const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
   const dateStr = now.toLocaleDateString("en-US",  { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
-  // Unique client list
-  const clients = [...new Set(employees.map(e => e.client))];
+  // All unique dates available in the data
+  const availableDates = [...new Set(employees.map(e => e.date).filter(Boolean))].sort((a,b) => new Date(a)-new Date(b));
+  const [selectedDate, setSelectedDate] = useState("today");
+
+  // Resolve which date key to filter by
+  const activeDateKey = selectedDate === "today" ? todayKey : selectedDate;
+
+  // Unique client list (scoped to selected date)
+  const clients = [...new Set(employees.filter(e => !e.date || e.date === activeDateKey).map(e => e.client))];
   const clientColor = c => CLIENT_COLORS[clients.indexOf(c) % CLIENT_COLORS.length];
 
-  // Employees scoped to active client
+  // Employees scoped to selected date + client
+  const dateScoped = employees.filter(e => !e.date || e.date === activeDateKey);
   const clientScoped = activeClient === "all"
-    ? employees
-    : employees.filter(e => e.client === activeClient);
+    ? dateScoped
+    : dateScoped.filter(e => e.client === activeClient);
 
-  // Status counts (scoped to selected client)
+  // Status counts
   const counts = {
     present:  clientScoped.filter(e => e.status === "present").length,
     late:     clientScoped.filter(e => e.status === "late").length,
@@ -467,6 +490,17 @@ export default function DashboardCorporate() {
                   ))}
                 </div>
               )}
+              {/* Date selector */}
+              <select
+                value={selectedDate}
+                onChange={e => { setSelectedDate(e.target.value); setStatusFilter("all"); }}
+                style={{ padding:"7px 12px", borderRadius:8, border:"1.5px solid #e2e8f0", fontSize:13,
+                  fontFamily:"inherit", color:"#0f172a", background:"#fff", cursor:"pointer", outline:"none" }}>
+                <option value="today">📅 Today</option>
+                {availableDates.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
               {!isClientMode && activeClient !== "all" && (
                 <span style={{ fontSize:12, padding:"4px 10px", borderRadius:6,
                   background: clientColor(activeClient) + "15",
