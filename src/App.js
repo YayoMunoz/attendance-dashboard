@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import * as XLSX from "xlsx";
 
 // ─── Real employee data ────────────────────────────────────────────────────────
@@ -119,6 +119,9 @@ function initials(n = "") {
   return n.split(" ").slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("");
 }
 
+// ─── Google Sheets API ─────────────────────────────────────────────────────────
+const SHEETS_API_URL = "https://script.google.com/macros/s/AKfycby8DhUqfbdgS1cQNW7aX3Jy0x-axbsrl3-tu5-6q_mScJYsbTO71sSFcmbPs7M2w9Qm/exec";
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 export default function DashboardCorporate() {
   // Detect ?client= param in the URL — locks the view to that client
@@ -133,9 +136,11 @@ export default function DashboardCorporate() {
     ? (SAMPLE.map(e => e.client).find(c => matchClient(c)) ?? null)
     : null;
 
-  const isClientMode = !!lockedClient; // true = client view, false = admin view
+  const isClientMode = !!lockedClient;
 
   const [employees, setEmployees] = useState(SAMPLE);
+  const [loading, setLoading]     = useState(true);
+  const [sheetError, setSheetError] = useState(null);
   const [activeClient, setActiveClient] = useState(lockedClient ?? "all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch]       = useState("");
@@ -145,6 +150,44 @@ export default function DashboardCorporate() {
   const [editingComment, setEditingComment] = useState(null);
   const fileRef = useRef();
   const commentRef = useRef();
+
+  // ── Fetch from Google Sheets on load ──
+  useEffect(() => {
+    setLoading(true);
+    fetch(SHEETS_API_URL)
+      .then(res => res.json())
+      .then(rows => {
+        if (!rows || !rows.length) { setLoading(false); return; }
+
+        // Map sheet columns to employee objects
+        const mapped = rows
+          .filter(r => r["Name"] || r["name"] || r["Nombre"])
+          .map((r, i) => ({
+            id:      i + 1,
+            client:  r["Client"]  || r["client"]  || r["Cliente"] || "Unknown",
+            name:    r["Name"]    || r["name"]    || r["Nombre"]  || "Unknown",
+            role:    r["Role"]    || r["role"]    || r["Posición"]|| "—",
+            manager: r["Manager"] || r["manager"] || r["Jefe"]    || "—",
+            status:  normStatus(r["Status"] || r["status"] || r["Estado"] || ""),
+            arrival: r["Arrival"] || r["arrival"] || r["Hora"]    || null,
+            comment: r["Comment"] || r["comment"] || r["Comentario"] || "",
+          }));
+
+        if (mapped.length > 0) {
+          setEmployees(mapped);
+          // Re-lock client if URL param present
+          if (urlClient) {
+            const match = mapped.map(e => e.client).find(c => matchClient(c));
+            if (match) setActiveClient(match);
+          }
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        setSheetError("Could not connect to Google Sheets — showing local data.");
+        setLoading(false);
+      });
+  }, []);
 
   const now     = new Date();
   const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
@@ -237,6 +280,22 @@ export default function DashboardCorporate() {
         ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
         .sidebar-section{font-size:10px;font-weight:600;color:#94a3b8;letter-spacing:0.1em;text-transform:uppercase;padding:0 8px;margin-bottom:6px;margin-top:20px}
       `}</style>
+
+      {/* ── Loading banner ── */}
+      {loading && (
+        <div style={{ position:"fixed", top:0, left:0, right:0, zIndex:200, background:"#4f46e5", color:"#fff",
+          padding:"10px", textAlign:"center", fontSize:13, fontWeight:600 }}>
+          ⟳ Loading data from Google Sheets…
+        </div>
+      )}
+
+      {/* ── Sheet error banner ── */}
+      {sheetError && (
+        <div style={{ position:"fixed", top:0, left:0, right:0, zIndex:200, background:"#f59e0b", color:"#fff",
+          padding:"10px", textAlign:"center", fontSize:13, fontWeight:600 }}>
+          ⚠ {sheetError}
+        </div>
+      )}
 
       {/* ── Comment edit modal ── */}
       {editingComment && (() => {
