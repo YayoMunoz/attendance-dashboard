@@ -50,6 +50,7 @@ const ST = {
   present:  { label:"Present",     dot:"#16a34a", bg:"#dcfce7", text:"#15803d" },
   late:     { label:"Late",        dot:"#d97706", bg:"#fef3c7", text:"#b45309" },
   vacation: { label:"On Vacation", dot:"#0284c7", bg:"#e0f2fe", text:"#0369a1" },
+  absent:   { label:"Absent",      dot:"#7c3aed", bg:"#ede9fe", text:"#6d28d9" },
   pending:  { label:"Unreported",  dot:"#dc2626", bg:"#fee2e2", text:"#b91c1c" },
 };
 
@@ -75,8 +76,9 @@ function normStatus(r = "") {
   const s = r.toString().toLowerCase().trim();
   if (!s) return "pending";
   if (s.includes("vacation") || s.includes("vacacion") || s.includes("holiday") || s.includes("fuera") || s.includes("pto") || s === "off") return "vacation";
-  if (s.includes("late")    || s.includes("tarde")    || s.includes("tardy")   || s.includes("delayed"))  return "late";
-  if (s.includes("present") || s.includes("presente") || s.includes("here")    || s.includes("on time") || s.includes("checked in")) return "present";
+  if (s.includes("absent")   || s.includes("ausente")  || s.includes("falta"))   return "absent";
+  if (s.includes("late")     || s.includes("tarde")    || s.includes("tardy")    || s.includes("delayed")) return "late";
+  if (s.includes("present")  || s.includes("presente") || s.includes("here")     || s.includes("on time") || s.includes("checked in")) return "present";
   return "pending";
 }
 
@@ -231,17 +233,34 @@ export default function DashboardCorporate() {
     present:  clientScoped.filter(e => e.status === "present").length,
     late:     clientScoped.filter(e => e.status === "late").length,
     vacation: clientScoped.filter(e => e.status === "vacation").length,
+    absent:   clientScoped.filter(e => e.status === "absent").length,
     pending:  clientScoped.filter(e => e.status === "pending").length,
   };
 
-  // Final filtered rows
-  const filtered = clientScoped.filter(e => {
-    const mS = statusFilter === "all" || e.status === statusFilter;
-    const mQ = [e.name, e.role, e.manager].some(v =>
-      v.toLowerCase().includes(search.toLowerCase())
-    );
-    return mS && mQ;
-  });
+  // Sorting
+  const [sortBy, setSortBy]     = useState(null); // "name"|"role"|"manager"|"status"
+  const [sortDir, setSortDir]   = useState("asc");
+
+  function handleSort(col) {
+    if (sortBy === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortBy(col); setSortDir("asc"); }
+  }
+
+  // Final filtered + sorted rows
+  const filtered = clientScoped
+    .filter(e => {
+      const mS = statusFilter === "all" || e.status === statusFilter;
+      const mQ = [e.name, e.role, e.manager].some(v =>
+        v.toLowerCase().includes(search.toLowerCase())
+      );
+      return mS && mQ;
+    })
+    .sort((a, b) => {
+      if (!sortBy) return 0;
+      const va = (a[sortBy] || "").toLowerCase();
+      const vb = (b[sortBy] || "").toLowerCase();
+      return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
 
   const coverage = clientScoped.length
     ? Math.round(((counts.present + counts.late) / clientScoped.length) * 100)
@@ -549,6 +568,51 @@ export default function DashboardCorporate() {
             </div>
             )}
 
+            {/* ── Summary cards ── */}
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:12, marginBottom:24 }}>
+              {/* Late */}
+              <div style={{ background:"#fff", borderRadius:12, border:"1px solid #fde68a", padding:"16px 18px", display:"flex", alignItems:"center", gap:14 }}>
+                <div style={{ width:44, height:44, borderRadius:10, background:"#fef3c7", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>⏰</div>
+                <div>
+                  <div style={{ fontSize:28, fontWeight:800, color:"#b45309", lineHeight:1 }}>{counts.late}</div>
+                  <div style={{ fontSize:11, color:"#92400e", fontWeight:600, marginTop:3 }}>Late</div>
+                </div>
+              </div>
+              {/* On Vacation */}
+              <div style={{ background:"#fff", borderRadius:12, border:"1px solid #bae6fd", padding:"16px 18px", display:"flex", alignItems:"center", gap:14 }}>
+                <div style={{ width:44, height:44, borderRadius:10, background:"#e0f2fe", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>✈️</div>
+                <div>
+                  <div style={{ fontSize:28, fontWeight:800, color:"#0369a1", lineHeight:1 }}>{counts.vacation}</div>
+                  <div style={{ fontSize:11, color:"#075985", fontWeight:600, marginTop:3 }}>On Vacation</div>
+                </div>
+              </div>
+              {/* Absent */}
+              <div style={{ background:"#fff", borderRadius:12, border:"1px solid #ddd6fe", padding:"16px 18px", display:"flex", alignItems:"center", gap:14 }}>
+                <div style={{ width:44, height:44, borderRadius:10, background:"#ede9fe", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>🚫</div>
+                <div>
+                  <div style={{ fontSize:28, fontWeight:800, color:"#6d28d9", lineHeight:1 }}>{counts.absent}</div>
+                  <div style={{ fontSize:11, color:"#5b21b6", fontWeight:600, marginTop:3 }}>Absent</div>
+                </div>
+              </div>
+              {/* Unreported */}
+              <div style={{ background:"#fff", borderRadius:12, border:"1px solid #fecaca", padding:"16px 18px", display:"flex", alignItems:"center", gap:14 }}>
+                <div style={{ width:44, height:44, borderRadius:10, background:"#fee2e2", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>❓</div>
+                <div>
+                  <div style={{ fontSize:28, fontWeight:800, color:"#b91c1c", lineHeight:1 }}>{counts.pending}</div>
+                  <div style={{ fontSize:11, color:"#991b1b", fontWeight:600, marginTop:3 }}>Unreported</div>
+                </div>
+              </div>
+              {/* Coverage bar */}
+              <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e2e8f0", padding:"16px 18px", gridColumn:"span 1" }}>
+                <div style={{ fontSize:11, color:"#64748b", fontWeight:600, marginBottom:6 }}>COVERAGE TODAY</div>
+                <div style={{ fontSize:28, fontWeight:800, color:"#4f46e5", lineHeight:1 }}>{coverage}%</div>
+                <div style={{ height:4, background:"#e2e8f0", borderRadius:2, marginTop:8 }}>
+                  <div style={{ height:"100%", borderRadius:2, background:"#4f46e5", width:`${coverage}%`, transition:"width .6s" }}/>
+                </div>
+                <div style={{ fontSize:10, color:"#94a3b8", marginTop:4 }}>{counts.present + counts.late} of {clientScoped.length} active</div>
+              </div>
+            </div>
+
             {/* Search bar */}
             <div style={{ position:"relative", maxWidth:360, marginBottom:20 }}>
               <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
@@ -563,10 +627,20 @@ export default function DashboardCorporate() {
                 <thead>
                   <tr style={{ background:"#f8fafc", borderBottom:"1px solid #e2e8f0" }}>
                     {((!isClientMode && activeClient === "all")
-                      ? ["Employee","Role","Manager","Client","Status","Time","Notes"]
-                      : ["Employee","Role","Manager","Status","Time","Notes"]
-                    ).map(h => (
-                      <th key={h} style={{ padding:"12px 16px", textAlign:"left", fontWeight:600, color:"#64748b", fontSize:11, textTransform:"uppercase", letterSpacing:"0.06em" }}>{h}</th>
+                      ? [["Employee","name"],["Role","role"],["Manager","manager"],["Client",null],["Status","status"],["Time",null],["Notes",null]]
+                      : [["Employee","name"],["Role","role"],["Manager","manager"],["Status","status"],["Time",null],["Notes",null]]
+                    ).map(([h, col]) => (
+                      <th key={h}
+                        onClick={() => col && handleSort(col)}
+                        style={{ padding:"12px 16px", textAlign:"left", fontWeight:600, color: col && sortBy===col ? "#4f46e5" : "#64748b",
+                          fontSize:11, textTransform:"uppercase", letterSpacing:"0.06em",
+                          cursor: col ? "pointer" : "default", userSelect:"none",
+                          whiteSpace:"nowrap" }}>
+                        {h}
+                        {col && <span style={{ marginLeft:4, opacity: sortBy===col ? 1 : 0.3 }}>
+                          {sortBy===col ? (sortDir==="asc" ? "↑" : "↓") : "↕"}
+                        </span>}
+                      </th>
                     ))}
                   </tr>
                 </thead>
