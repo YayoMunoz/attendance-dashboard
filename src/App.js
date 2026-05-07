@@ -126,7 +126,7 @@ export default function Dashboard() {
 
   const now      = new Date();
   const todayKey = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()}`;
-  const timeStr  = now.toLocaleTimeString("en-US", { hour:"2-digit", minute:"2-digit" });
+  const timeStr  = now.toLocaleTimeString("en-US", { hour:"2-digit", minute:"2-digit", timeZone:"America/Mexico_City" });
   const dateStr  = now.toLocaleDateString("en-US",  { weekday:"long", day:"numeric", month:"long", year:"numeric" });
 
   const availableDates = [...new Set(employees.map(e => e.date).filter(Boolean))].sort((a,b)=>new Date(a)-new Date(b));
@@ -339,6 +339,7 @@ export default function Dashboard() {
                 {availableDates.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
               <div style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:16,fontWeight:500,color:"#4f46e5" }}>{timeStr}</div>
+              <div style={{ fontSize:10,color:"#94a3b8",fontWeight:600,letterSpacing:"0.05em" }}>MX TIME</div>
             </div>
           </div>
 
